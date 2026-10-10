@@ -10,6 +10,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
 // ---------- singleton scraper, lazily warmed ----------
 let scraperPromise = null;
 
@@ -32,7 +36,7 @@ function getScraper() {
   return scraperPromise;
 }
 
-// ---------- response cache (fixed: never caches a rejection) ----------
+// ---------- response cache (never caches a rejection) ----------
 const cache = new Map();
 const TTL = 10 * 60 * 1000;
 
@@ -57,6 +61,26 @@ function assertSafeUrl(raw) {
   );
   if (!ok) throw new Error(`Host not allowed: ${u.hostname}`);
   return u;
+}
+
+// If handed an .m3u8, walk down the qualities until an mp4 actually resolves.
+async function resolveAsset(url) {
+  if (!/\.m3u8(\?|$)/i.test(url)) return url;
+
+  const headers = { "User-Agent": BROWSER_UA, Referer: "https://www.pinterest.com/" };
+  for (const q of ["720p", "540p", "480p", "360p"]) {
+    const cand = url
+      .replace(/\/hls\//, `/${q}/`)
+      .replace(/\.m3u8(\?.*)?$/, ".mp4");
+    try {
+      const r = await fetch(cand, { method: "HEAD", headers });
+      if (r.ok) {
+        console.log(`resolved m3u8 -> ${q} mp4`);
+        return cand;
+      }
+    } catch { /* try next quality */ }
+  }
+  return url; // give up, stream the playlist
 }
 
 // filterGenAi always resolves to a boolean
@@ -120,25 +144,57 @@ app.post("/api/search", async (req, res) => {
 });
 
 app.get("/api/download", async (req, res) => {
-  const { url, name } = req.query;
+  const { url, name, dl } = req.query;
   if (!url) return res.status(400).json({ error: "Missing ?url=" });
 
   try {
     assertSafeUrl(url);
-    const upstream = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", Referer: "https://www.pinterest.com/" },
-    });
-    if (!upstream.ok) return res.status(upstream.status).end();
+    const resolved = await resolveAsset(url);
 
-    const ct = upstream.headers.get("content-type") || "application/octet-stream";
-    const ext = ct.includes("video") ? "mp4" : ct.includes("png") ? "png" : "jpg";
+    const headers = {
+      "User-Agent": BROWSER_UA,
+      Referer: "https://www.pinterest.com/",
+      Origin: "https://www.pinterest.com",
+      Accept: "*/*",
+    };
+    if (req.headers.range) headers.Range = req.headers.range; // let players seek
+
+    const upstream = await fetch(resolved, { headers });
+    if (!upstream.ok && upstream.status !== 206) {
+      return res.status(upstream.status).end();
+    }
+
+    // trust the URL extension first — content-type is unreliable for video
+    const pathExt = (
+      new URL(resolved).pathname.match(/\.(mp4|webm|mov|m4v|jpg|jpeg|png|gif|webp|avif)$/i) || []
+    )[1];
+    const ct = upstream.headers.get("content-type") || "";
+    const ext =
+      pathExt ||
+      (ct.includes("video") ? "mp4" : ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : "jpg");
+
     const filename = name
-      ? `${String(name).replace(/[^\w\-]/g, "_")}.${ext}`
-      : (new URL(url).pathname.split("/").pop() || `file.${ext}`);
+      ? `${String(name).replace(/[^\w\-]/g, "_").slice(0, 80)}.${ext}`
+      : (new URL(resolved).pathname.split("/").pop() || `file.${ext}`);
 
-    res.setHeader("Content-Type", ct);
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.status(upstream.status); // preserve 206 Partial Content
+    res.setHeader("Content-Type", ct || (ext === "mp4" ? "video/mp4" : "image/jpeg"));
     res.setHeader("Cache-Control", "public, max-age=86400");
+    if (dl !== "0") {
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    }
+
+    // forward length/range only when the body wasn't transparently decompressed
+    const cl = upstream.headers.get("content-length");
+    if (cl && !upstream.headers.get("content-encoding")) {
+      res.setHeader("Content-Length", cl);
+    }
+    const cr = upstream.headers.get("content-range");
+    if (cr) res.setHeader("Content-Range", cr);
+    if (upstream.headers.get("accept-ranges")) {
+      res.setHeader("Accept-Ranges", "bytes");
+    }
+
     Readable.fromWeb(upstream.body).pipe(res);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -153,8 +209,14 @@ app.get("/api/random", async (req, res) => {
     const pins = await runSearch({ q, limit: 100, type, filterGenAi });
     const pool = pins.filter((p) => (type === "video" ? p.video_url : p.image_url));
     if (!pool.length) return res.status(404).json({ error: "No results" });
+
     const pick = pool[Math.floor(Math.random() * pool.length)];
-    res.redirect(pick.video_url || pick.image_url);
+    const asset = pick.video_url || pick.image_url;
+
+    // bounce through our own proxy so Pinterest receives the Referer it wants
+    res.redirect(
+      `/api/download?url=${encodeURIComponent(asset)}&name=${encodeURIComponent(q + "_" + pick.id)}`
+    );
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -187,14 +249,14 @@ app.get("/api/zip", async (req, res) => {
     archive.on("error", (e) => res.destroy(e));
     archive.pipe(res);
 
+    const headers = { "User-Agent": BROWSER_UA, Referer: "https://www.pinterest.com/" };
     let i = 0;
     async function worker() {
       while (i < items.length) {
         const item = items[i++];
         try {
-          const r = await fetch(item.url, {
-            headers: { "User-Agent": "Mozilla/5.0", Referer: "https://www.pinterest.com/" },
-          });
+          const target = await resolveAsset(item.url);
+          const r = await fetch(target, { headers });
           if (!r.ok) continue;
           archive.append(Buffer.from(await r.arrayBuffer()), { name: item.name });
         } catch { /* skip broken asset */ }
