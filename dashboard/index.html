@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#fcf9f6">
+    <meta name="description" content="Search Pinterest and download visual inspiration with PinScrap.">
+    <title>PinScrap — Search &amp; Scrape Pinterest</title>
+    <link rel="stylesheet" href="/dashboard/styles.css">
+    <script src="/dashboard/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-group">
+        <a class="brand" href="/dashboard/" data-view="search">
+          <span class="brand-icon" aria-hidden="true">⌘</span>
+          <span>PinScrap</span>
+        </a>
+        <div class="api-indicator" id="api-indicator" role="status">
+          <span class="status-dot"></span>
+          <span id="api-label">Checking API</span>
+        </div>
+      </div>
+
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-link is-active" type="button" data-view="search">Search</button>
+        <button class="nav-link" type="button" data-view="results">Results</button>
+        <button class="nav-link" type="button" data-view="docs">Docs</button>
+      </nav>
+
+      <div class="profile-mark" aria-label="PinScrap dashboard">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c.6-3.1 3-4.7 6.5-4.7s5.9 1.6 6.5 4.7"/></svg>
+      </div>
+    </header>
+
+    <main>
+      <section class="screen search-screen" id="search-screen" aria-labelledby="hero-title">
+        <div class="hero-wrap">
+          <div class="pixel-decor pixel-left" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="pixel-decor pixel-right" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="hero-content">
+            <div class="engine-pill"><span class="status-dot"></span><span>PINSCRAP ENGINE V1.2</span><span class="muted-dot">•</span><span id="engine-status">Connecting</span></div>
+            <h1 id="hero-title">Search &amp; Scrape Pinterest</h1>
+            <p class="hero-subtitle">High-throughput visual asset extraction. Fetch full-res images, video streams, and structured metadata in milliseconds.</p>
+
+            <form class="hero-search" id="search-form">
+              <span class="search-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 4 4"/></svg>
+              </span>
+              <input id="search-input" name="q" type="search" placeholder="Search pins, boards, tags, or paste Pinterest URL..." autocomplete="off" spellcheck="false" required>
+              <kbd class="shortcut"><span>⌘</span> K</kbd>
+              <button class="primary-button search-button" id="search-button" type="submit"><span aria-hidden="true">ϟ</span> Search Pins</button>
+            </form>
+
+            <div class="scrape-status" id="scrape-status" hidden>
+              <div class="scrape-status-heading"><span class="scrape-spinner" aria-hidden="true">↻</span><span id="scrape-message">Searching Pinterest…</span></div>
+              <div class="progress-track"><span id="scrape-progress"></span></div>
+            </div>
+
+            <div class="quick-filters" aria-label="Search options">
+              <span class="quick-filter is-dark"><span aria-hidden="true">▧</span> Images &amp; Videos</span>
+              <button class="quick-filter is-dark" id="ai-filter-home" type="button" aria-pressed="true"><span aria-hidden="true">◈</span> Filter GenAI: <span id="ai-label-home">On</span></button>
+              <button class="quick-filter" type="button" disabled title="Board search is not supported by the current API"><span aria-hidden="true">▦</span> Include Boards</button>
+              <button class="quick-filter" type="button" disabled title="Resolution selection is not supported by the current API"><span aria-hidden="true">▣</span> Raw Resolution (4K)</button>
+            </div>
+
+            <div class="suggestions">
+              <span class="section-kicker">SUGGESTED QUERIES</span>
+              <div class="suggestion-list">
+                <button type="button" data-query="Architecture">Architecture</button>
+                <button type="button" data-query="Interior Design">Interior Design</button>
+                <button type="button" data-query="Cyberpunk UI">Cyberpunk UI</button>
+                <button type="button" data-query="Macro Photography">Macro Photography</button>
+                <button type="button" data-query="Typography">Typography</button>
+                <button type="button" data-query="Brutalist Posters">Brutalist Posters</button>
+              </div>
+            </div>
+
+            <div class="feature-grid">
+              <article class="feature-card">
+                <div class="feature-title"><span class="feature-icon">▧</span><h2>Lossless Batch Export</h2></div>
+                <p>Stream full-fidelity originals through an organized ZIP archive for your search.</p>
+                <div class="feature-foot"><span>Up to 60 results</span><span class="feature-accent">ZIP enabled</span></div>
+              </article>
+              <article class="feature-card">
+                <div class="feature-title"><span class="feature-icon">◈</span><h2>Generative AI Guard</h2></div>
+                <p>Apply PinScrap’s AI filter to help separate generated results from your visual search.</p>
+                <div class="feature-foot"><span>Search filter</span><span class="feature-success">Configurable</span></div>
+              </article>
+              <article class="feature-card">
+                <div class="feature-title"><span class="feature-icon">⌘</span><h2>REST API</h2></div>
+                <p>Search and download through the PinScrap service already running this dashboard.</p>
+                <div class="feature-foot"><span>Same-origin API</span><span class="feature-accent">Connected</span></div>
+              </article>
+            </div>
+
+            <div class="hero-metrics">
+              <span><i class="metric-dot purple"></i><span id="health-cache">API cache ready</span></span>
+              <span class="metric-separator">•</span>
+              <span><i class="metric-dot green"></i><span id="health-uptime">Health check pending</span></span>
+              <span class="metric-separator">•</span>
+              <span><span class="check-mark">✓</span> Direct ZIP export enabled</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen results-screen" id="results-screen" aria-label="Pinterest search results" hidden>
+        <div class="results-toolbar">
+          <div class="toolbar-top">
+            <form class="query-form" id="results-form">
+              <span class="search-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 4 4"/></svg>
+              </span>
+              <input id="query-input" name="q" type="search" placeholder="Search pins..." autocomplete="off" required>
+              <button class="icon-button clear-button" id="clear-search" type="button" aria-label="Clear search">×</button>
+            </form>
+
+            <div class="result-summary"><span class="summary-dot"></span><span id="result-count">Search Pinterest to see results</span></div>
+            <div class="export-ready"><span class="summary-dot"></span><span id="export-label">Ready for export</span></div>
+
+            <div class="toolbar-actions">
+              <button class="secondary-button" id="select-all" type="button" disabled><span class="checkbox-icon"></span><span id="select-all-label">Select All</span></button>
+              <a class="primary-button zip-button is-disabled" id="download-all" href="#" aria-disabled="true">
+                <span aria-hidden="true">▧</span><span>Download All (.ZIP)</span><span class="zip-size" id="zip-count"></span>
+              </a>
+            </div>
+          </div>
+
+          <div class="toolbar-bottom">
+            <div class="filter-tabs" role="group" aria-label="Filter results by media type">
+              <button class="filter-tab is-active" type="button" data-filter="all">All <span data-count="all"></span></button>
+              <button class="filter-tab" type="button" data-filter="image">Images only <span data-count="image"></span></button>
+              <button class="filter-tab" type="button" data-filter="video">Videos only <span data-count="video"></span></button>
+            </div>
+            <div class="toolbar-options">
+              <label class="ai-dedupe">
+                <input id="ai-filter-results" type="checkbox" checked>
+                <span class="toggle-track" aria-hidden="true"><span></span></span>
+                <span>AI Visual Deduplication</span>
+              </label>
+              <span class="option-separator">|</span>
+              <label class="sort-label" for="sort-results"><span aria-hidden="true">☷</span><span>Sorting:</span>
+                <select id="sort-results" aria-label="Sort results">
+                  <option value="relevance">Relevance</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty-state" id="empty-state">
+          <span class="empty-symbol" aria-hidden="true">⌕</span>
+          <h1 id="empty-title">Your search results will appear here</h1>
+          <p id="empty-copy">Search Pinterest for images, videos, and visual inspiration.</p>
+          <button class="secondary-button" type="button" data-view="search">Back to search</button>
+        </div>
+
+        <div class="error-message" id="error-message" role="alert" hidden></div>
+        <section class="masonry-grid" id="masonry-grid" aria-label="Pinterest pins" aria-live="polite"></section>
+
+        <section class="scrape-details">
+          <div class="scrape-detail-left"><span class="status-dot"></span><span id="job-status">Ready for your first search</span><span class="detail-separator">•</span><span>Endpoint: <code id="job-endpoint">/api/search</code></span></div>
+          <div class="scrape-detail-right"><span id="result-type-summary">Images and videos</span><span class="detail-separator">•</span><span>ZIP export available</span></div>
+        </section>
+
+        <aside class="bulk-bar" id="bulk-bar" aria-live="polite" hidden>
+          <div class="bulk-info">
+            <span class="bulk-icon" aria-hidden="true">▧</span>
+            <span><strong id="bulk-count">0 items selected</strong><small>Download selected assets individually</small></span>
+          </div>
+          <div class="bulk-actions">
+            <button class="bulk-clear" id="clear-selection" type="button">Deselect</button>
+            <button class="primary-button" id="download-selected" type="button">Download Selected</button>
+          </div>
+        </aside>
+      </section>
+
+      <section class="screen docs-screen" id="docs-screen" hidden>
+        <div class="docs-content">
+          <span class="section-kicker">REST REFERENCE</span>
+          <h1>PinScrap API</h1>
+          <p>Dashboard requests go to the PinScrap service running this page.</p>
+          <article class="docs-card"><span class="method">GET</span><div><h2>Search pins</h2><code>/api/search?q=architecture&amp;limit=60&amp;type=all&amp;filterGenAi=true</code><p>Returns Pinterest pin metadata and available image or video URLs.</p></div></article>
+          <article class="docs-card"><span class="method">GET</span><div><h2>Download an asset</h2><code>/api/download?url={pinimg_url}&amp;name={filename}</code><p>Streams an individual Pinterest image or video through the media proxy.</p></div></article>
+          <article class="docs-card"><span class="method">GET</span><div><h2>Download a ZIP</h2><code>/api/zip?q=architecture&amp;limit=60&amp;type=all</code><p>Packages downloadable search results into a ZIP archive.</p></div></article>
+          <article class="docs-card"><span class="method">GET</span><div><h2>Health check</h2><code>/health</code><p>Reports API availability, uptime, and cached search count.</p></div></article>
+          <a class="docs-link" href="/API.md">Read the complete API documentation →</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>© 2026 PinScrap Engine. High-throughput extraction infrastructure.</span>
+      <span><a href="/API.md">REST Specs</a><span class="footer-divider">•</span> Same-origin API</span>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

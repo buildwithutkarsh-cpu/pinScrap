@@ -65,6 +65,15 @@ The server starts on:
 http://localhost:3000
 ```
 
+Open the PinScrap dashboard at either URL:
+
+```text
+http://localhost:3000/dashboard
+http://localhost:3000/dashboard/
+```
+
+The dashboard is built with plain HTML, CSS, and JavaScript and uses the API served by the same app.
+
 ## Quick examples
 
 ### Search for pins

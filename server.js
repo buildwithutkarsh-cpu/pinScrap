@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("node:path");
 const { Readable } = require("node:stream");
 const archiver = require("archiver");
 const PinterestScraper = require("./pinterest");
@@ -9,6 +10,11 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.get("/dashboard", (req, res, next) => {
+  if (req.path === "/dashboard") return res.redirect("/dashboard/");
+  next();
+});
+app.use("/dashboard", express.static(path.join(__dirname, "dashboard")));
 
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -269,22 +275,12 @@ app.get("/api/zip", async (req, res) => {
   }
 });
 
+app.get("/API.md", (_req, res) => {
+  res.sendFile(path.join(__dirname, "API.md"));
+});
+
 app.get("/", (_req, res) => {
-  res.type("html").send(`<!doctype html><html><head><meta charset="utf-8">
-<title>Pinterest API</title>
-<style>body{font:15px/1.6 system-ui;max-width:640px;margin:60px auto;padding:0 20px}
-code{background:#f2f2f2;padding:2px 6px;border-radius:4px}</style></head><body>
-<h1>Pinterest Scraper API</h1>
-<ul>
-<li><code>/api/search?q=halftone%20poster&amp;limit=30&amp;type=image</code></li>
-<li><code>/api/search?q=lofi&amp;type=video</code></li>
-<li><code>/api/random?q=nature&amp;type=video</code></li>
-<li><code>/api/download?url=&lt;pinimg url&gt;&amp;name=myfile</code></li>
-<li><code>/api/zip?q=acid%20graphics&amp;limit=40</code></li>
-<li><code>POST /api/search</code> with <code>{"queries":["a","b"]}</code></li>
-</ul>
-<p>Add <code>&amp;filterGenAi=false</code> to any search to disable the Less-AI filter.</p>
-</body></html>`);
+  res.redirect("/dashboard/");
 });
 
 app.listen(PORT, "0.0.0.0", () => {
