@@ -79,7 +79,7 @@ The dashboard is built with plain HTML, CSS, and JavaScript and uses the API ser
 ## MCP server
 
 The stdio MCP server provides tools for Pinterest search, batch search, random pins, download URLs, ZIP URLs, and API health.
-It reads `PINSCRAP_URL` (default `https://pinscrap.onrender.com`) and `PINSCRAP_TIMEOUT_MS` (default `90000` milliseconds).
+It reads `PINSCRAP_URL` (default `https://pinscrap.onrender.com`), `PINSCRAP_TIMEOUT_MS` (default `90000` milliseconds), and `PINSCRAP_MCP_RATE_LIMIT` (default `30` tool calls per minute, shared across all tools).
 
 Run it with:
 

@@ -3,6 +3,9 @@
 
 const BASE = (process.env.PINSCRAP_URL || "https://pinscrap.onrender.com").replace(/\/+$/, "");
 const TIMEOUT = Number(process.env.PINSCRAP_TIMEOUT_MS || 90000);
+const RATE_LIMIT = Number(process.env.PINSCRAP_MCP_RATE_LIMIT || 30);
+const RATE_WINDOW_MS = 60_000;
+const toolCalls = [];
 
 const qs = (values) => {
   const params = new URLSearchParams();
@@ -82,7 +85,33 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function withRateLimit(handler) {
+  return async (...args) => {
+    const now = Date.now();
+    while (toolCalls.length && toolCalls[0] <= now - RATE_WINDOW_MS) {
+      toolCalls.shift();
+    }
+
+    if (toolCalls.length >= RATE_LIMIT) {
+      const retryAfterSeconds = Math.ceil(
+        (toolCalls[0] + RATE_WINDOW_MS - now) / 1000,
+      );
+      return fail(
+        `MCP rate limit exceeded (${RATE_LIMIT} tool calls per minute). ` +
+        `Retry after ${retryAfterSeconds} seconds.`,
+      );
+    }
+
+    toolCalls.push(now);
+    return handler(...args);
+  };
+}
+
 async function main() {
+  if (!Number.isSafeInteger(RATE_LIMIT) || RATE_LIMIT < 1) {
+    throw new Error("PINSCRAP_MCP_RATE_LIMIT must be a positive integer.");
+  }
+
   const [{ McpServer }, { StdioServerTransport }, { z }] = await Promise.all([
     import("@modelcontextprotocol/sdk/server/mcp.js"),
     import("@modelcontextprotocol/sdk/server/stdio.js"),
@@ -101,7 +130,7 @@ async function main() {
       type: typeEnum.describe("Filter by media type"),
       filter_gen_ai: z.boolean().optional().describe("Filter out AI-generated pins. Omit to use server default"),
     },
-    async ({ query, limit, type, filter_gen_ai }) => {
+    withRateLimit(async ({ query, limit, type, filter_gen_ai }) => {
       try {
         const response = await api(`/api/search?${qs({
           q: query,
@@ -118,7 +147,7 @@ async function main() {
       } catch (error) {
         return fail(errorMessage(error));
       }
-    },
+    }),
   );
 
   server.tool(
@@ -130,7 +159,7 @@ async function main() {
       type: typeEnum,
       filter_gen_ai: z.boolean().optional(),
     },
-    async ({ queries, limit, type, filter_gen_ai }) => {
+    withRateLimit(async ({ queries, limit, type, filter_gen_ai }) => {
       try {
         const response = await api("/api/search", {
           method: "POST",
@@ -150,14 +179,14 @@ async function main() {
       } catch (error) {
         return fail(errorMessage(error));
       }
-    },
+    }),
   );
 
   server.tool(
     "get_random_pin",
     "Get one random pin asset URL for a keyword (proxied download link). Good when the agent just needs a single image or video.",
     { query: z.string().min(1), type: typeEnum },
-    async ({ query, type }) => {
+    withRateLimit(async ({ query, type }) => {
       try {
         const response = await api(`/api/random?${qs({ q: query, type })}`);
         if (response.status >= 300 && response.status < 400) {
@@ -174,7 +203,7 @@ async function main() {
       } catch (error) {
         return fail(errorMessage(error));
       }
-    },
+    }),
   );
 
   server.tool(
@@ -184,7 +213,7 @@ async function main() {
       url: z.string().url().describe("image_url / video_url / hls_url from a search result"),
       name: z.string().optional().describe("File name base"),
     },
-    async ({ url, name }) => {
+    withRateLimit(async ({ url, name }) => {
       try {
         const hostname = new URL(url).hostname.toLowerCase();
         if (hostname !== "pinimg.com" && !hostname.endsWith(".pinimg.com")) {
@@ -196,7 +225,7 @@ async function main() {
       } catch (error) {
         return fail(errorMessage(error));
       }
-    },
+    }),
   );
 
   server.tool(
@@ -207,26 +236,28 @@ async function main() {
       limit: z.number().int().min(1).max(60).default(10),
       type: typeEnum,
     },
-    async ({ query, limit, type }) => ok({
+    withRateLimit(async ({ query, limit, type }) => ok({
       zip_url: `${BASE}/api/zip?${qs({ q: query, limit, type })}`,
-    }),
+    })),
   );
 
   server.tool(
     "pinscrap_health",
     "Check whether the pinScrap API is online (also wakes it from sleep). Returns uptime and cache size.",
     {},
-    async () => {
+    withRateLimit(async () => {
       try {
         return ok(await jsonOrError(await api("/health")));
       } catch (error) {
         return fail(errorMessage(error));
       }
-    },
+    }),
   );
 
   await server.connect(new StdioServerTransport());
-  console.error(`pinscrap-mcp running, API: ${BASE}`);
+  console.error(
+    `pinscrap-mcp running, API: ${BASE}, rate limit: ${RATE_LIMIT} tool calls/minute`,
+  );
 }
 
 main().catch((error) => {
