@@ -36,6 +36,15 @@ class PinterestScraper {
     return new Promise((r) => setTimeout(r, ms));
   }
 
+  // Pinterest mirrors its HLS paths as real mp4 files.
+  // .../videos/mc/hls/aa/bb/cc/hash.m3u8 -> .../videos/mc/720p/aa/bb/cc/hash.mp4
+  static mp4FromHls(hlsUrl, quality = "720p") {
+    if (!hlsUrl) return null;
+    return hlsUrl
+      .replace(/\/hls\//, `/${quality}/`)
+      .replace(/\.m3u8(\?.*)?$/, ".mp4");
+  }
+
   get cookieHeader() {
     return Object.entries(this.cookies).map(([k, v]) => `${k}=${v}`).join("; ");
   }
@@ -162,17 +171,18 @@ class PinterestScraper {
     return pins;
   }
 
-  // Extracts video URLs alongside images.
+  // Extracts video URLs alongside images; always yields a real mp4 when possible.
   static parsePin(raw) {
     const images = raw.images || {};
     const pinner = raw.pinner || {};
     const videos = raw.videos?.video_list || {};
 
-    const video_url =
-      videos.V_720P?.url ||
-      videos.V_540P?.url ||
-      videos.V_HLSV4?.url ||
-      null;
+    const VIDEO_ORDER = ["V_720P", "V_540P", "V_480P", "V_360P", "V_HLSV4", "V_HLSV3"];
+    const candidates = VIDEO_ORDER.map((k) => videos[k]?.url).filter(Boolean);
+    const direct = candidates.find((u) => !/\.m3u8(\?|$)/i.test(u));
+    const hls = candidates.find((u) => /\.m3u8(\?|$)/i.test(u)) || null;
+    // prefer a real mp4; otherwise synthesise one from the HLS path
+    const video_url = direct || PinterestScraper.mp4FromHls(hls) || null;
 
     const image_url =
       images?.orig?.url || images?.["736x"]?.url || images?.["564x"]?.url || null;
@@ -185,6 +195,7 @@ class PinterestScraper {
       link: raw.link || "",
       image_url,
       video_url,
+      hls_url: hls,
       thumbnail_url: images?.["236x"]?.url || image_url,
       pin_url: raw.id ? `https://www.pinterest.com/pin/${raw.id}/` : null,
       width: images?.orig?.width ?? null,
@@ -228,14 +239,25 @@ class PinterestScraper {
     return pins;
   }
 
-  async _searchJson(query, { maxPins = 100, pageSize = 25, type = "all", filterGenAi = this.filterGenAi } = {}) {
+  async _searchJson(
+    query,
+    { maxPins = 100, pageSize = 25, type = "all", filterGenAi = this.filterGenAi } = {}
+  ) {
     const collected = [];
     let bookmark = null;
+    let pages = 0;
+    const MAX_PAGES = 12; // guard against a bad cursor spinning forever
+
     while (collected.length < maxPins) {
       const payload = await this._request(query, bookmark, pageSize, filterGenAi);
       const data = payload?.resource_response?.data || {};
       const results = data.results || [];
-      bookmark = data.bookmark;
+      // Pinterest returns the cursor at resource_response.bookmark, not data.bookmark
+      bookmark =
+        data.bookmark ||
+        payload?.resource_response?.bookmark ||
+        null;
+
       if (results.length === 0) break;
 
       for (const item of results) {
@@ -246,8 +268,11 @@ class PinterestScraper {
         collected.push(parsed);
         if (collected.length >= maxPins) break;
       }
-      console.log(`[${query}] collected ${collected.length} pins...`);
+
+      console.log(`[${query}] page ${pages + 1}: collected ${collected.length} pins...`);
+
       if (!bookmark) break;
+      if (++pages >= MAX_PAGES) break;
       await PinterestScraper.sleep(this.delay);
     }
     return collected;
