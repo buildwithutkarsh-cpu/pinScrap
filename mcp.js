@@ -3,6 +3,7 @@
 
 const BASE = (process.env.PINSCRAP_URL || "https://pinscrap.onrender.com").replace(/\/+$/, "");
 const TIMEOUT = Number(process.env.PINSCRAP_TIMEOUT_MS || 90000);
+const API_KEY = process.env.PINSCRAP_API_KEY;
 const RATE_LIMIT = Number(process.env.PINSCRAP_MCP_RATE_LIMIT || 30);
 const RATE_WINDOW_MS = 60_000;
 const toolCalls = [];
@@ -21,6 +22,10 @@ async function api(path, init = {}) {
   try {
     return await fetch(new URL(path, `${BASE}/`), {
       ...init,
+      headers: {
+        ...init.headers,
+        ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+      },
       signal: controller.signal,
       redirect: "manual",
     });
@@ -256,7 +261,8 @@ async function main() {
 
   await server.connect(new StdioServerTransport());
   console.error(
-    `pinscrap-mcp running, API: ${BASE}, rate limit: ${RATE_LIMIT} tool calls/minute`,
+    `pinscrap-mcp running, API: ${BASE}, API key: ${API_KEY ? "configured" : "missing"}, ` +
+    `rate limit: ${RATE_LIMIT} tool calls/minute`,
   );
 }
 

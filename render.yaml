@@ -16,3 +16,11 @@ services:
         value: "true"
       - key: SCRAPE_DELAY
         value: "900"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PINSCRAP_ADMIN_KEY
+        sync: false
+      - key: PINSCRAP_KEY_HASH_SECRET
+        sync: false

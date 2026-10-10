@@ -25,6 +25,7 @@
       <nav class="main-nav" aria-label="Main navigation">
         <button class="nav-link is-active" type="button" data-view="search">Search</button>
         <button class="nav-link" type="button" data-view="results">Results</button>
+        <button class="nav-link" type="button" data-view="keys">API Keys</button>
         <button class="nav-link" type="button" data-view="docs">Docs</button>
       </nav>
 
@@ -114,6 +115,9 @@
               </span>
               <input id="query-input" name="q" type="search" placeholder="Search pins..." autocomplete="off" required>
               <button class="icon-button clear-button" id="clear-search" type="button" aria-label="Clear search">×</button>
+              <button class="icon-button query-submit" type="submit" aria-label="Search Pinterest">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 4 4"/></svg>
+              </button>
             </form>
 
             <div class="result-summary"><span class="summary-dot"></span><span id="result-count">Search Pinterest to see results</span></div>
@@ -187,6 +191,77 @@
           <article class="docs-card"><span class="method">GET</span><div><h2>Download a ZIP</h2><code>/api/zip?q=architecture&amp;limit=60&amp;type=all</code><p>Packages downloadable search results into a ZIP archive.</p></div></article>
           <article class="docs-card"><span class="method">GET</span><div><h2>Health check</h2><code>/health</code><p>Reports API availability, uptime, and cached search count.</p></div></article>
           <a class="docs-link" href="/API.md">Read the complete API documentation →</a>
+        </div>
+      </section>
+
+      <section class="screen keys-screen" id="keys-screen" hidden aria-labelledby="keys-title">
+        <div class="keys-content">
+          <div class="keys-heading">
+            <span class="section-kicker">DEVELOPER ACCESS</span>
+            <h1 id="keys-title">API keys</h1>
+            <p>Create and revoke credentials for the PinScrap REST API and MCP tools.</p>
+          </div>
+
+          <div class="key-notice">
+            <span class="notice-icon" aria-hidden="true">!</span>
+            <p>API keys are shown only once. Keep them private. The admin key is used only to manage keys and is held in memory for this page.</p>
+          </div>
+
+          <section class="key-panel" aria-labelledby="admin-access-title">
+            <div class="panel-heading">
+              <div><h2 id="admin-access-title">Admin access</h2><p>Unlock key management with the <code>PINSCRAP_ADMIN_KEY</code> configured on the server.</p></div>
+            </div>
+            <form class="admin-unlock-form" id="admin-unlock-form">
+              <label class="visually-hidden" for="admin-secret">PinScrap admin key</label>
+              <input id="admin-secret" type="password" autocomplete="current-password" placeholder="Enter server admin key" required>
+              <button class="primary-button" type="submit">Unlock</button>
+              <button class="secondary-button" id="admin-lock" type="button" hidden>Lock</button>
+            </form>
+            <p class="form-message" id="admin-message" role="status"></p>
+          </section>
+
+          <section class="key-panel" id="create-key-panel" hidden aria-labelledby="create-key-title">
+            <div class="panel-heading">
+              <div><h2 id="create-key-title">Create an API key</h2><p>Use a descriptive name so you can identify each client later.</p></div>
+            </div>
+            <form class="create-key-form" id="create-key-form">
+              <label for="new-key-name">Key name</label>
+              <div class="create-key-controls">
+                <input id="new-key-name" name="name" type="text" maxlength="80" placeholder="e.g. Claude Desktop" required>
+                <button class="primary-button" type="submit">+ Create API key</button>
+              </div>
+            </form>
+            <div class="new-key-reveal" id="new-key-reveal" hidden>
+              <div class="reveal-heading"><strong>Copy this key now</strong><span>It will not be shown again.</span></div>
+              <div class="reveal-controls"><code id="new-key-value"></code><button class="secondary-button" id="copy-new-key" type="button">Copy key</button><button class="primary-button" id="use-new-key" type="button">Use in dashboard</button></div>
+              <p class="setup-footnote">For MCP clients, set <code>PINSCRAP_API_KEY</code> to this value in the MCP server environment.</p>
+              <p class="form-message" id="key-copy-message" role="status"></p>
+            </div>
+          </section>
+
+          <section class="key-panel" id="api-access-panel" aria-labelledby="api-access-title">
+            <div class="panel-heading">
+              <div><h2 id="api-access-title">Dashboard API access</h2><p>Paste a PinScrap API key to use protected search and media downloads in this browser tab.</p></div>
+            </div>
+            <form class="admin-unlock-form" id="api-key-form">
+              <label class="visually-hidden" for="api-key-input">PinScrap API key</label>
+              <input id="api-key-input" type="password" autocomplete="off" placeholder="ps_..." required>
+              <button class="primary-button" type="submit">Connect</button>
+              <button class="secondary-button" id="clear-api-key" type="button">Disconnect</button>
+            </form>
+            <p class="form-message" id="api-key-message" role="status"></p>
+          </section>
+
+          <section class="key-panel" id="key-list-panel" hidden aria-labelledby="key-list-title">
+            <div class="panel-heading"><div><h2 id="key-list-title">Your keys</h2><p>Revoking a key blocks its next API request immediately.</p></div><button class="secondary-button" id="refresh-keys" type="button">Refresh list</button></div>
+            <div class="key-list" id="key-list"></div>
+          </section>
+
+          <section class="key-panel setup-panel">
+            <div class="panel-heading"><div><h2>Supabase setup</h2><p>Run <code>supabase/schema.sql</code> in the Supabase SQL Editor, then add these server environment variables.</p></div></div>
+            <div class="env-list"><code>SUPABASE_URL</code><code>SUPABASE_SERVICE_ROLE_KEY</code><code>PINSCRAP_ADMIN_KEY</code><code>PINSCRAP_KEY_HASH_SECRET</code></div>
+            <p class="setup-footnote">Never put the Supabase service-role key or admin key in browser code. API keys are HMAC-hashed before storage.</p>
+          </section>
         </div>
       </section>
     </main>

@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const { createHmac, randomBytes, randomUUID, timingSafeEqual } = require("node:crypto");
 const path = require("node:path");
 const { Readable } = require("node:stream");
 const archiver = require("archiver");
@@ -15,6 +16,148 @@ app.get("/dashboard", (req, res, next) => {
   next();
 });
 app.use("/dashboard", express.static(path.join(__dirname, "dashboard")));
+
+const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const API_KEY_HASH_SECRET = process.env.PINSCRAP_KEY_HASH_SECRET;
+const ADMIN_KEY = process.env.PINSCRAP_ADMIN_KEY;
+
+function apiKeyHash(key) {
+  return createHmac("sha256", API_KEY_HASH_SECRET).update(key).digest("hex");
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+async function supabaseRequest(resource, init = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !API_KEY_HASH_SECRET) {
+    throw new Error("API key storage is not configured. Set the Supabase and key-secret environment variables.");
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${resource}`, {
+    ...init,
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      ...init.headers,
+    },
+  });
+  const text = await response.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = null;
+  }
+  if (!response.ok) {
+    throw new Error(`Supabase request failed (${response.status}): ${body?.message || text.slice(0, 200)}`);
+  }
+  return body;
+}
+
+function requireAdmin(req, res, next) {
+  if (!ADMIN_KEY) {
+    return res.status(503).json({ error: "API key management is not configured. Set PINSCRAP_ADMIN_KEY." });
+  }
+  if (Buffer.byteLength(ADMIN_KEY) < 32) {
+    return res.status(503).json({ error: "PINSCRAP_ADMIN_KEY must be at least 32 bytes." });
+  }
+
+  const provided = req.get("x-pinscrap-admin-key") || "";
+  if (!safeEqual(provided, ADMIN_KEY)) {
+    return res.status(401).json({ error: "Valid PinScrap admin key required." });
+  }
+  next();
+}
+
+app.get("/api/keys", requireAdmin, async (_req, res) => {
+  try {
+    const keys = await supabaseRequest(
+      "pinscrap_api_keys?select=id,name,key_prefix,created_at,last_used_at,revoked_at&order=created_at.desc",
+    );
+    res.json({ keys });
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+});
+
+app.post("/api/keys", requireAdmin, async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name || name.length > 80) {
+    return res.status(400).json({ error: "Key name must contain 1 to 80 characters." });
+  }
+  if (!API_KEY_HASH_SECRET || Buffer.byteLength(API_KEY_HASH_SECRET) < 32) {
+    return res.status(503).json({ error: "PINSCRAP_KEY_HASH_SECRET must be set to at least 32 bytes." });
+  }
+
+  try {
+    const key = `ps_${randomBytes(32).toString("base64url")}`;
+    const [record] = await supabaseRequest("pinscrap_api_keys", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify([{
+        id: randomUUID(),
+        name,
+        key_prefix: key.slice(0, 11),
+        key_hash: apiKeyHash(key),
+      }]),
+    });
+    if (!record) throw new Error("Supabase did not return the created API key record.");
+    const { id, name: keyName, key_prefix, created_at, last_used_at, revoked_at } = record;
+    res.status(201).json({
+      key,
+      record: { id, name: keyName, key_prefix, created_at, last_used_at, revoked_at },
+    });
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+});
+
+app.delete("/api/keys/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = encodeURIComponent(req.params.id);
+    const records = await supabaseRequest(`pinscrap_api_keys?id=eq.${id}&revoked_at=is.null`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+    });
+    if (!records.length) return res.status(404).json({ error: "Active API key not found." });
+    res.json({ revoked: true, id: records[0].id });
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+});
+
+async function requireApiKey(req, res, next) {
+  const authorization = req.get("authorization") || "";
+  const key = req.get("x-api-key") || (authorization.match(/^Bearer\s+(.+)$/i) || [])[1];
+  if (!key) return res.status(401).json({ error: "API key required. Send it as a Bearer token or X-API-Key header." });
+
+  try {
+    const keyHash = apiKeyHash(key);
+    const matches = await supabaseRequest(
+      `pinscrap_api_keys?key_hash=eq.${keyHash}&revoked_at=is.null&select=id`,
+    );
+    if (!matches.length) return res.status(401).json({ error: "Invalid or revoked API key." });
+
+    await supabaseRequest(`pinscrap_api_keys?id=eq.${matches[0].id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ last_used_at: new Date().toISOString() }),
+    });
+    next();
+  } catch (error) {
+    console.error("API key verification failed:", error.message);
+    res.status(503).json({ error: "API key verification is temporarily unavailable." });
+  }
+}
+
+app.use("/api", requireApiKey);
+
+app.get("/api/keys/verify", (_req, res) => res.json({ ok: true }));
 
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +

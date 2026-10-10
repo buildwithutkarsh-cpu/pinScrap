@@ -8,7 +8,18 @@ Base URL
 
 Common headers
 - Content-Type: application/json for POST requests
-- Authorization: not required
+- Authentication: required for `/api/*` requests using `X-API-Key: <key>` or `Authorization: Bearer <key>`
+- `/health` is public; `/api/keys` management endpoints use the `X-PinScrap-Admin-Key: <admin-secret>` header instead
+
+Create and revoke API keys from the dashboard's **API Keys** page. Before creating keys, run `supabase/schema.sql` in the Supabase SQL Editor and configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PINSCRAP_ADMIN_KEY`, and `PINSCRAP_KEY_HASH_SECRET` on the server. The dashboard displays a newly created key only once.
+
+Key-management endpoints:
+- `GET /api/keys`: list key metadata (admin header required)
+- `POST /api/keys` with `{"name":"Claude Desktop"}`: create a key; returns its secret once (admin header required)
+- `DELETE /api/keys/{id}`: revoke a key (admin header required)
+- `GET /api/keys/verify`: verify a supplied API key (API key header required)
+
+The admin secret and HMAC hash secret must each be at least 32 bytes. Keep the HMAC hash secret stable; changing it invalidates existing keys. API keys are accepted in `X-API-Key` or `Authorization: Bearer` headers and must be sent with every protected API request.
 
 Environment variables
 - PORT: HTTP port for the app; defaults to 3000
@@ -53,7 +64,7 @@ Query parameters
 
 Example request
 ```bash
-curl "http://localhost:3000/api/search?q=modern%20interior%20design&limit=10&type=image&filterGenAi=true"
+curl -H "X-API-Key: $PINSCRAP_API_KEY" "http://localhost:3000/api/search?q=modern%20interior%20design&limit=10&type=image&filterGenAi=true"
 ```
 
 Example response
@@ -103,6 +114,11 @@ Request body
 }
 ```
 
+Example request
+```bash
+curl -X POST -H "X-API-Key: $PINSCRAP_API_KEY" -H "Content-Type: application/json" -d "{\"queries\":[\"minimal living room\",\"boho bedroom\"],\"limit\":10,\"type\":\"all\"}" "http://localhost:3000/api/search"
+```
+
 Response
 ```json
 {
@@ -135,7 +151,7 @@ Query parameters
 
 Example request
 ```bash
-curl "http://localhost:3000/api/download?url=https://i.pinimg.com/originals/abc.jpg&name=my_photo&dl=1"
+curl -H "X-API-Key: $PINSCRAP_API_KEY" "http://localhost:3000/api/download?url=https://i.pinimg.com/originals/abc.jpg&name=my_photo&dl=1"
 ```
 
 Behavior
@@ -162,7 +178,7 @@ Query parameters
 
 Example request
 ```bash
-curl -L "http://localhost:3000/api/random?q=forest%20aesthetic&type=image"
+curl -H "X-API-Key: $PINSCRAP_API_KEY" -L "http://localhost:3000/api/random?q=forest%20aesthetic&type=image"
 ```
 
 Behavior
@@ -190,7 +206,7 @@ Query parameters
 
 Example request
 ```bash
-curl -L "http://localhost:3000/api/zip?q=cyberpunk%20city&limit=20&type=image" -o cyberpunk.zip
+curl -H "X-API-Key: $PINSCRAP_API_KEY" -L "http://localhost:3000/api/zip?q=cyberpunk%20city&limit=20&type=image" -o cyberpunk.zip
 ```
 
 Behavior

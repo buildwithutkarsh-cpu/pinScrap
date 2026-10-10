@@ -128,6 +128,9 @@ button.quick-filter[aria-pressed="false"] { color: #494456; background: var(--su
 .icon-button { display: grid; place-items: center; flex: none; width: 25px; height: 27px; border: 0; color: var(--muted); background: transparent; }
 .clear-button { font-size: 20px; }
 .clear-button:hover { color: var(--ink); }
+.query-submit { color: var(--purple); }
+.query-submit svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.query-submit:hover { background: #f3edff; }
 .result-summary, .export-ready { display: flex; align-items: center; gap: 6px; color: var(--subtle); font: 10px var(--mono); letter-spacing: .015em; }
 .summary-dot { width: 6px; height: 6px; background: var(--purple-bright); }
 .export-ready { color: var(--purple); }
@@ -213,6 +216,47 @@ button.quick-filter[aria-pressed="false"] { color: #494456; background: var(--su
 .docs-card p { margin: 7px 0 0; color: var(--subtle); font-size: 12px; }
 .docs-link { width: fit-content; margin-top: 7px; color: var(--purple); font-weight: 500; }
 .docs-link:hover { text-decoration: underline; }
+.keys-screen { padding: 43px 20px 65px; }
+.keys-content { display: grid; max-width: 850px; gap: 13px; margin: 0 auto; }
+.keys-heading .section-kicker { display: inline-block; margin-bottom: 5px; }
+.keys-heading h1 { margin: 0 0 5px; font-size: 32px; letter-spacing: -.04em; }
+.keys-heading > p { margin: 0; color: var(--subtle); }
+.key-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid #eddaaf; border-radius: 5px; color: #6b5422; background: #fff9e9; }
+.key-notice p { margin: 0; font-size: 12px; }
+.notice-icon { display: grid; width: 18px; height: 18px; flex: none; place-items: center; border-radius: 50%; color: white; background: #b98014; font-size: 12px; font-weight: 700; }
+.key-panel { display: grid; gap: 13px; padding: 18px; border: 1px solid var(--line); border-radius: 7px; background: white; }
+.panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.panel-heading h2 { margin: 0 0 4px; font-size: 15px; font-weight: 550; }
+.panel-heading p { margin: 0; color: var(--subtle); font-size: 12px; }
+.panel-heading code, .setup-footnote code { color: var(--purple); font: 10px var(--mono); }
+.admin-unlock-form, .create-key-controls { display: flex; align-items: center; gap: 8px; }
+.admin-unlock-form input, .create-key-controls input { min-width: 0; min-height: 39px; flex: 1; padding: 8px 11px; border: 1px solid var(--line); border-radius: 4px; background: #fff; outline: 0; }
+.admin-unlock-form input:focus, .create-key-controls input:focus { border-color: var(--purple-bright); }
+.create-key-form label { display: inline-block; margin-bottom: 5px; color: var(--subtle); font-size: 11px; }
+.form-message { min-height: 16px; margin: 0; color: var(--subtle); font: 10px var(--mono); overflow-wrap: anywhere; }
+.new-key-reveal { display: grid; gap: 9px; padding: 13px; border: 1px solid #c9b3f3; border-radius: 5px; background: #faf7ff; }
+.reveal-heading { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.reveal-heading strong { color: var(--purple); font-size: 12px; }
+.reveal-heading span { color: var(--subtle); font-size: 11px; }
+.reveal-controls { display: flex; align-items: center; gap: 7px; }
+.reveal-controls > code { min-width: 0; flex: 1; overflow-x: auto; padding: 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: white; font: 11px var(--mono); white-space: nowrap; }
+.setup-footnote { margin: 0; color: var(--subtle); font-size: 11px; line-height: 1.5; }
+.key-list { display: grid; gap: 8px; }
+.key-list-empty { margin: 0; padding: 18px; border: 1px dashed var(--line); border-radius: 5px; color: var(--muted); font-size: 12px; text-align: center; }
+.managed-key { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 5px; }
+.managed-key.is-revoked { background: var(--surface-low); }
+.managed-key-main { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.key-status-dot { width: 7px; height: 7px; flex: none; margin-top: 6px; border-radius: 50%; background: var(--green); }
+.key-status-dot.is-revoked { background: var(--muted); }
+.managed-key h3 { margin: 0 0 4px; font-size: 13px; font-weight: 550; }
+.managed-key p { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 0; color: var(--muted); font: 9px var(--mono); }
+.managed-key p code { color: var(--subtle); }
+.revoke-key { padding: 5px 8px; border: 1px solid #e4c4c0; border-radius: 4px; color: #a22e27; background: white; font-size: 10px; }
+.revoke-key:hover { background: #fff3f1; }
+.revoked-label { flex: none; color: var(--muted); font: 9px var(--mono); }
+.env-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.env-list code { padding: 5px 7px; border-radius: 3px; color: var(--purple); background: var(--surface-low); font: 9px var(--mono); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; clip-path: inset(50%); }
 .site-footer { min-height: 49px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 2.5rem; color: var(--subtle); background: white; font: 9px var(--mono); letter-spacing: .02em; }
 .site-footer a:hover { color: var(--purple); }
 .footer-divider { margin: 0 7px; color: #cbc3d9; }
@@ -288,6 +332,18 @@ button.quick-filter[aria-pressed="false"] { color: #494456; background: var(--su
   .bulk-clear { padding: 6px; font-size: 10px; }
   .bulk-bar .primary-button { min-height: 31px; padding: 0 7px; font-size: 9px; }
   .docs-screen { padding: 35px 14px 63px; }
+  .keys-screen { padding: 33px 13px 63px; }
+  .keys-heading h1 { font-size: 27px; }
+  .key-panel { gap: 10px; padding: 13px 10px; }
+  .admin-unlock-form, .create-key-controls { align-items: stretch; flex-wrap: wrap; }
+  .admin-unlock-form input { flex-basis: 100%; }
+  .create-key-controls input { flex-basis: 100%; }
+  .reveal-controls { align-items: stretch; flex-wrap: wrap; }
+  .reveal-controls > code { flex-basis: 100%; }
+  .reveal-controls .button { flex: 1; }
+  .managed-key { align-items: flex-start; padding: 10px 8px; }
+  .managed-key p { flex-direction: column; gap: 3px; }
+  .key-notice { padding: 10px; }
   .docs-content > h1 { font-size: 27px; }
   .docs-card { grid-template-columns: 40px 1fr; gap: 10px; padding: 13px 10px; }
   .site-footer { align-items: flex-start; flex-direction: column; gap: 4px; padding: 9px 13px 57px; font-size: 8px; }
