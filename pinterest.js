@@ -40,12 +40,14 @@ class PinterestScraper {
     return Object.entries(this.cookies).map(([k, v]) => `${k}=${v}`).join("; ");
   }
 
-  buildSearchUrl(query) {
+  // filterGenAi is passed in so concurrent requests never stomp each other.
+  buildSearchUrl(query, filterGenAi = this.filterGenAi) {
     let url = `/search/pins/?q=${encodeURIComponent(query)}&rs=typed`;
-    if (this.filterGenAi) url += "&filter_genai=true";
+    if (filterGenAi) url += "&filter_genai=true";
     return url;
   }
 
+  // Optional. Anonymous warm-up in init() is enough on its own.
   loadSessionCookies() {
     if (process.env.PINTEREST_COOKIE) {
       for (const pair of process.env.PINTEREST_COOKIE.split(";")) {
@@ -65,7 +67,7 @@ class PinterestScraper {
       }
       console.log(`Loaded ${Object.keys(this.cookies).length} cookies from ${file}.`);
     } else {
-      console.warn("No cookies found. Log in for best results with filter_genai.");
+      console.warn("No cookies found. Running anonymously (filter_genai may be ignored).");
     }
   }
 
@@ -104,24 +106,24 @@ class PinterestScraper {
     console.log(
       `Warm-up done. csrftoken: ${this.cookies.csrftoken ? "OK" : "MISSING"} | ` +
         `logged in: ${this.cookies._pinterest_sess ? "YES" : "NO"} | ` +
-        `filter_genai: ${this.filterGenAi}`
+        `filter_genai default: ${this.filterGenAi}`
     );
     return this;
   }
 
-  async _request(query, bookmark = null, pageSize = 25) {
+  async _request(query, bookmark = null, pageSize = 25, filterGenAi = this.filterGenAi) {
     const options = { query, scope: "pins", page_size: pageSize };
     if (bookmark) options.bookmarks = [bookmark];
-    if (this.filterGenAi) options.filter_genai = true;
+    if (filterGenAi) options.filter_genai = true;
 
-    const sourceUrl = this.buildSearchUrl(query);
+    const sourceUrl = this.buildSearchUrl(query, filterGenAi);
 
     const params = new URLSearchParams({
       source_url: sourceUrl,
       data: JSON.stringify({ options, context: {} }),
       _: Date.now().toString(),
     });
-    if (this.filterGenAi) params.set("filter_genai", "true");
+    if (filterGenAi) params.set("filter_genai", "true");
 
     const headers = { ...this.baseHeaders, Cookie: this.cookieHeader };
     if (this.cookies.csrftoken) headers["X-CSRFToken"] = this.cookies.csrftoken;
@@ -136,8 +138,8 @@ class PinterestScraper {
     return json;
   }
 
-  async searchHtml(query, { maxPins = 25 } = {}) {
-    const url = `https://www.pinterest.com${this.buildSearchUrl(query)}`;
+  async searchHtml(query, { maxPins = 25, filterGenAi = this.filterGenAi } = {}) {
+    const url = `https://www.pinterest.com${this.buildSearchUrl(query, filterGenAi)}`;
     const res = await fetch(url, {
       headers: {
         "User-Agent": this.baseHeaders["User-Agent"],
@@ -160,7 +162,7 @@ class PinterestScraper {
     return pins;
   }
 
-  // ---- CHANGED: now extracts video URLs too ----
+  // Extracts video URLs alongside images.
   static parsePin(raw) {
     const images = raw.images || {};
     const pinner = raw.pinner || {};
@@ -202,38 +204,41 @@ class PinterestScraper {
     ].some((s) => text.includes(s));
   }
 
-  async search(query, { maxPins = 100, pageSize = 25, type = "all" } = {}) {
+  async search(query, { maxPins = 100, pageSize = 25, type = "all", filterGenAi } = {}) {
+    const fg = filterGenAi === undefined ? this.filterGenAi : filterGenAi;
+
     let pins;
     try {
-      pins = await this._searchJson(query, { maxPins, pageSize, type });
+      pins = await this._searchJson(query, { maxPins, pageSize, type, filterGenAi: fg });
     } catch (err) {
       if (!this.useFallback) throw err;
       console.warn(`[${query}] JSON failed (${err.message}). HTML fallback...`);
-      pins = await this.searchHtml(query, { maxPins });
+      pins = await this.searchHtml(query, { maxPins, filterGenAi: fg });
     }
+
     if (this.aiHeuristic) {
       const before = pins.length;
       pins = pins.filter((p) => !PinterestScraper.looksLikeAi(p));
       console.log(`[${query}] heuristic dropped ${before - pins.length} AI-looking pins.`);
     }
+
     if (type === "image" || type === "video") {
       pins = pins.filter((p) => p.type === type);
     }
     return pins;
   }
 
-  async _searchJson(query, { maxPins = 100, pageSize = 25, type = "all" } = {}) {
+  async _searchJson(query, { maxPins = 100, pageSize = 25, type = "all", filterGenAi = this.filterGenAi } = {}) {
     const collected = [];
     let bookmark = null;
     while (collected.length < maxPins) {
-      const payload = await this._request(query, bookmark, pageSize);
+      const payload = await this._request(query, bookmark, pageSize, filterGenAi);
       const data = payload?.resource_response?.data || {};
       const results = data.results || [];
       bookmark = data.bookmark;
       if (results.length === 0) break;
 
       for (const item of results) {
-        // CHANGED: accept "story" pins (video pins) as well as "pin"
         if (item.type !== "pin" && item.type !== "story") continue;
         const parsed = PinterestScraper.parsePin(item);
         if (type === "video" && !parsed.video_url) continue;
@@ -262,13 +267,7 @@ class PinterestScraper {
   }
 }
 
-module.exports = PinterestScraper;
-module.exports.PinterestScraper = PinterestScraper;
-module.exports.saveCsv = saveCsv;
-module.exports.saveJson = saveJson;
-module.exports.downloadImages = downloadImages;
-
-// ---------- helpers (kept for CLI use) ----------
+// ---------- helpers (CLI use) ----------
 function csvEscape(v) {
   const s = String(v ?? "");
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -307,7 +306,13 @@ async function downloadImages(pins, folder = "images", concurrency = 5) {
   console.log(`Images -> ${folder}/`);
 }
 
-// ---------- CLI: only runs when you do `node pinterest.js` ----------
+module.exports = PinterestScraper;
+module.exports.PinterestScraper = PinterestScraper;
+module.exports.saveCsv = saveCsv;
+module.exports.saveJson = saveJson;
+module.exports.downloadImages = downloadImages;
+
+// ---------- CLI ----------
 async function cli() {
   const scraper = new PinterestScraper({ delay: 1200, filterGenAi: true, aiHeuristic: true });
   await scraper.init();
