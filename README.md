@@ -17,6 +17,8 @@ A Node.js Express API that searches Pinterest pins and streams image/video asset
 ```text
 .
 ├── API.md
+├── dashboard/
+├── mcp.js
 ├── package.json
 ├── pinterest.js
 ├── render.yaml
@@ -73,6 +75,26 @@ http://localhost:3000/dashboard/
 ```
 
 The dashboard is built with plain HTML, CSS, and JavaScript and uses the API served by the same app.
+
+## MCP server
+
+The stdio MCP server provides tools for Pinterest search, batch search, random pins, download URLs, ZIP URLs, and API health.
+It reads `PINSCRAP_URL` (default `https://pinscrap.onrender.com`) and `PINSCRAP_TIMEOUT_MS` (default `90000` milliseconds).
+
+Run it with:
+
+```bash
+npm run mcp
+```
+
+To connect it to the local API, set `PINSCRAP_URL` before starting it. In PowerShell:
+
+```powershell
+$env:PINSCRAP_URL = "http://localhost:3000"
+npm run mcp
+```
+
+Configure your MCP client to launch Node.js with the absolute path to `mcp.js`. Set `PINSCRAP_URL` in the client environment when using a non-default API URL. The MCP server writes diagnostics to standard error and uses standard input/output for MCP messages.
 
 ## Quick examples
 
