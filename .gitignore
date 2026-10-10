@@ -1,0 +1,7 @@
+node_modules/
+cookies.txt
+images/
+pins.csv
+pins.json
+.env
+*.log

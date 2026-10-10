@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: pinterest-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.11.1"
+      - key: PINTEREST_COOKIE
+        sync: false
+      - key: FILTER_GENAI
+        value: "true"
+      - key: SCRAPE_DELAY
+        value: "900"
