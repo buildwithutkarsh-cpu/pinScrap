@@ -25,27 +25,31 @@ function getScraper() {
       await s.init();
       return s;
     })().catch((e) => {
-      scraperPromise = null; // allow retry on next request
+      scraperPromise = null; // let the next request retry
       throw e;
     });
   }
   return scraperPromise;
 }
 
-// ---------- response cache ----------
+// ---------- response cache (fixed: never caches a rejection) ----------
 const cache = new Map();
 const TTL = 10 * 60 * 1000;
 
 function cached(key, fn) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < TTL) return Promise.resolve(hit.value);
-  const value = fn();
+
+  const value = fn().catch((err) => {
+    cache.delete(key); // a transient 429 shouldn't poison the query for 10 min
+    throw err;
+  });
   cache.set(key, { ts: Date.now(), value });
   return value;
 }
 
 // ---------- asset URL safety ----------
-const ALLOWED_HOSTS = ["pinimg.com", "v1.pinimg.com", "v.pinimg.com"];
+const ALLOWED_HOSTS = ["pinimg.com"];
 function assertSafeUrl(raw) {
   const u = new URL(raw);
   const ok = ALLOWED_HOSTS.some(
@@ -55,23 +59,22 @@ function assertSafeUrl(raw) {
   return u;
 }
 
+// filterGenAi always resolves to a boolean
 function parseOpts(req) {
   const q = (req.query.q || req.query.query || "").trim();
   const limit = Math.min(Math.max(parseInt(req.query.limit ?? "30", 10) || 30, 1), 200);
   const type = (req.query.type ?? "all").toLowerCase();
-  const filterGenAi = req.query.filterGenAi !== undefined
-    ? req.query.filterGenAi !== "false"
-    : undefined;
+  const filterGenAi =
+    req.query.filterGenAi !== undefined
+      ? req.query.filterGenAi !== "false"
+      : process.env.FILTER_GENAI !== "false";
   return { q, limit, type, filterGenAi };
 }
 
 async function runSearch({ q, limit, type, filterGenAi }) {
   const scraper = await getScraper();
-  // per-request toggles (class reads these at call time)
-  if (filterGenAi !== undefined) scraper.filterGenAi = filterGenAi;
-
-  const key = `${q}|${limit}|${type}|${scraper.filterGenAi}`;
-  return cached(key, () => scraper.search(q, { maxPins: limit, type }));
+  const key = `${q}|${limit}|${type}|${filterGenAi}`;
+  return cached(key, () => scraper.search(q, { maxPins: limit, type, filterGenAi }));
 }
 
 // ---------- routes ----------
@@ -85,7 +88,7 @@ app.get("/api/search", async (req, res) => {
 
   try {
     const pins = await runSearch({ q, limit, type, filterGenAi });
-    res.json({ query: q, type, count: pins.length, results: pins });
+    res.json({ query: q, type, filterGenAi, count: pins.length, results: pins });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -98,11 +101,15 @@ app.post("/api/search", async (req, res) => {
   }
   const limit = Math.min(Math.max(parseInt(req.body.limit ?? "30", 10) || 30, 1), 200);
   const type = (req.body.type ?? "all").toLowerCase();
+  const filterGenAi =
+    req.body.filterGenAi !== undefined
+      ? req.body.filterGenAi !== false
+      : process.env.FILTER_GENAI !== "false";
 
   try {
     const out = {};
     for (const q of queries.slice(0, 10)) {
-      const pins = await runSearch({ q, limit, type });
+      const pins = await runSearch({ q, limit, type, filterGenAi });
       pins.forEach((p) => (p.query = q));
       out[q] = pins;
     }
@@ -112,7 +119,6 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// force-download or inline-proxy any pinimg asset
 app.get("/api/download", async (req, res) => {
   const { url, name } = req.query;
   if (!url) return res.status(400).json({ error: "Missing ?url=" });
@@ -139,13 +145,12 @@ app.get("/api/download", async (req, res) => {
   }
 });
 
-// redirect straight to one random asset
 app.get("/api/random", async (req, res) => {
-  const { q, type } = parseOpts(req);
+  const { q, type, filterGenAi } = parseOpts(req);
   if (!q) return res.status(400).json({ error: "Missing ?q=" });
 
   try {
-    const pins = await runSearch({ q, limit: 100, type: type === "all" ? "all" : type });
+    const pins = await runSearch({ q, limit: 100, type, filterGenAi });
     const pool = pins.filter((p) => (type === "video" ? p.video_url : p.image_url));
     if (!pool.length) return res.status(404).json({ error: "No results" });
     const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -155,15 +160,14 @@ app.get("/api/random", async (req, res) => {
   }
 });
 
-// bundle results into a zip
 app.get("/api/zip", async (req, res) => {
-  const { q, limit, type } = parseOpts(req);
+  const { q, limit, type, filterGenAi } = parseOpts(req);
   if (!q) return res.status(400).json({ error: "Missing ?q=" });
 
   const cap = Math.min(limit, 60); // keep memory sane on Render free tier
 
   try {
-    const pins = await runSearch({ q, limit: cap, type });
+    const pins = await runSearch({ q, limit: cap, type, filterGenAi });
     const items = pins
       .map((p) => {
         const url = p.video_url || p.image_url;
@@ -203,7 +207,6 @@ app.get("/api/zip", async (req, res) => {
   }
 });
 
-// tiny landing page
 app.get("/", (_req, res) => {
   res.type("html").send(`<!doctype html><html><head><meta charset="utf-8">
 <title>Pinterest API</title>
@@ -217,7 +220,9 @@ code{background:#f2f2f2;padding:2px 6px;border-radius:4px}</style></head><body>
 <li><code>/api/download?url=&lt;pinimg url&gt;&amp;name=myfile</code></li>
 <li><code>/api/zip?q=acid%20graphics&amp;limit=40</code></li>
 <li><code>POST /api/search</code> with <code>{"queries":["a","b"]}</code></li>
-</ul></body></html>`);
+</ul>
+<p>Add <code>&amp;filterGenAi=false</code> to any search to disable the Less-AI filter.</p>
+</body></html>`);
 });
 
 app.listen(PORT, "0.0.0.0", () => {
